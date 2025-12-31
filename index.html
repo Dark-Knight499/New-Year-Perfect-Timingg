@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Year Drop</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+</head>
+<body>
+
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+        <div class="globe globe-3"></div>
+    </div>
+
+    <!-- Dev Panel (Hidden by default, toggle with Ctrl+Shift+D) -->
+    <div id="dev-panel" class="glass-panel hidden">
+        <h3>Dev Control</h3>
+        <div>
+            <label>Fake Offset (s): <input type="number" id="dev-offset" value="0"></label>
+            <button id="dev-set-midnight">Simulate Midnight in 10s</button>
+        </div>
+        <div id="debug-log">Log initialized...</div>
+    </div>
+
+    <main class="app-container">
+        
+        <!-- Selection Phase -->
+        <section id="selection-view" class="view active">
+            <h1 class="title">Select Your <span class="gradient-text">Drop</span></h1>
+            
+            <div class="carousel-container">
+                <button class="nav-btn prev" id="prev-btn">❮</button>
+                <div class="card-track" id="card-track">
+                    <!-- Cards injected by JS -->
+                    <div class="loading-spinner">Loading Registry...</div>
+                </div>
+                <button class="nav-btn next" id="next-btn">❯</button>
+            </div>
+
+            <button id="arm-btn" class="cta-btn" disabled>Initialize Drop</button>
+        </section>
+
+        <!-- Countdown Phase -->
+        <section id="countdown-view" class="view">
+            <div class="timer-container">
+                <div class="time-unit">
+                    <span id="hours">00</span>
+                    <label>HOURS</label>
+                </div>
+                <div class="separator">:</div>
+                <div class="time-unit">
+                    <span id="minutes">00</span>
+                    <label>MINUTES</label>
+                </div>
+                <div class="separator">:</div>
+                <div class="time-unit">
+                    <span id="seconds">00</span>
+                    <label>SECONDS</label>
+                </div>
+            </div>
+            
+            <div class="status-message" id="status-msg">Waiting for the moment...</div>
+            
+            <div class="video-container hidden" id="video-container">
+                <video id="main-video" playsinline></video>
+                <div class="video-overlay"></div>
+            </div>
+
+            <button id="cancel-btn" class="secondary-btn">Change Drop</button>
+        </section>
+
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
