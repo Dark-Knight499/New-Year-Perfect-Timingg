@@ -1,14 +1,21 @@
-// Registry Manifest - Manually update this list when adding new YAML files to clips_registry/
-const REGISTRY_FILES = [
-    'yjhd.yaml'
+/**
+ * REGISTRY DATA (Embedded for Offline Access)
+ * This allows the app to work directly from the file system without CORS errors.
+ */
+const REGISTRY_DATA = [
+    `
+name: "Yeh Jawaani Hai Deewani"
+duration: 12
+start_time_before_new_year: "00:11"
+path: "./clips/yjhd.mp4"
+`
 ];
 
 // State
 let clips = [];
 let selectedClip = null;
 let videoBlobUrl = null;
-let midnight = new Date(new Date().getFullYear() + 1, 0, 1, 0, 0, 0).getTime(); // Default Next Year
-// midnight = new Date().setHours(24,0,0,0); // Next midnight for testing? User wants New Year.
+let midnight = new Date(new Date().getFullYear() + 1, 0, 1, 0, 0, 0).getTime();
 
 // DOM Elements
 const views = {
@@ -27,11 +34,12 @@ const video = document.getElementById('main-video');
 const statusMsg = document.getElementById('status-msg');
 
 // Dev Panel
-let devOffset = 0; // Seconds to shift "Midnight" by
+let devOffset = 0;
 if (location.hash === '#dev') {
     document.getElementById('dev-panel').classList.remove('hidden');
 }
-// Toggle Dev Panel with Ctrl+Shift+D
+
+// Keybinds (Dev Panel)
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'D') {
         document.getElementById('dev-panel').classList.toggle('hidden');
@@ -40,10 +48,26 @@ document.addEventListener('keydown', (e) => {
 
 document.getElementById('dev-set-midnight').addEventListener('click', () => {
     const now = Date.now();
-    // Set midnight to 10 seconds from now
-    midnight = now + 10000;
-    devOffset = 0; // Reset offset if manually setting target
+    midnight = now + 10000; // 10s from now
+    devOffset = 0;
     log(`Dev: Midnight set to ${new Date(midnight).toLocaleTimeString()}`);
+});
+
+document.getElementById('dev-set-target').addEventListener('click', () => {
+    const timeInput = document.getElementById('dev-target-time').value;
+    if (!timeInput) return;
+
+    const [h, m] = timeInput.split(':').map(Number);
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+
+    // If target is in the past, assume it's for tomorrow (or just let it be past for testing "missed" logic)
+    // But usually for testing we want upcoming. 
+    // If user sets 22:00 and it's 22:51, it's past. They probably meant 23:00.
+
+    midnight = target.getTime();
+    devOffset = 0;
+    log(`Dev: Target set to ${target.toLocaleTimeString()}`);
 });
 
 document.getElementById('dev-offset').addEventListener('change', (e) => {
@@ -53,35 +77,32 @@ document.getElementById('dev-offset').addEventListener('change', (e) => {
 
 // App Init
 async function init() {
-    log('Initializing...');
-    await loadRegistry();
+    log('Initializing Midnight Gold...');
+    loadRegistry();
     renderCarousel();
-
-    // Check if it is already past New Year? (Not handling for now, assuming before)
 }
 
-async function loadRegistry() {
+function loadRegistry() {
     try {
-        const promises = REGISTRY_FILES.map(async file => {
-            const res = await fetch(`clips_registry/${file}`);
-            const text = await res.text();
-            const data = jsyaml.load(text);
-            return { ...data, id: file.replace('.yaml', '') };
+        clips = REGISTRY_DATA.map(yamlStr => {
+            return jsyaml.load(yamlStr);
         });
-        clips = await Promise.all(promises);
-        log(`Loaded ${clips.length} clips`);
+        // Add ID based on index since no filename
+        clips.forEach((c, i) => c.id = 'clip_' + i);
+
+        log(`Loaded ${clips.length} clips internally.`);
 
         if (clips.length > 0) {
-            selectClip(clips[0]); // Auto-select first
+            selectClip(clips[0]);
         }
     } catch (e) {
-        log('Error loading registry: ' + e.message);
-        cardTrack.innerHTML = '<div style="color:red; text-align:center;">Failed to load clips.<br><small>If running locally, simple file access is blocked by CORS. Please use a local server (e.g., python -m http.server) or deploy.</small></div>';
+        log('Error parsing embedded registry: ' + e.message);
+        cardTrack.innerHTML = '<div style="color:red">Failed to load clips.</div>';
     }
 }
 
 function parseTimeStr(str) {
-    // "00:11" -> 11 seconds
+    if (typeof str === 'number') return str;
     const parts = str.split(':').map(Number);
     if (parts.length === 2) return parts[0] * 60 + parts[1];
     return Number(str);
@@ -92,7 +113,7 @@ function renderCarousel() {
     clips.forEach(clip => {
         const div = document.createElement('div');
         div.className = 'clip-card';
-        div.innerHTML = `<h3>${clip.name}</h3><p>${clip.duration}s Clip</p>`;
+        div.innerHTML = `<h3>${clip.name}</h3><p>${clip.duration}s Sequence</p>`;
         div.onclick = () => selectClip(clip);
         if (selectedClip && selectedClip.id === clip.id) {
             div.classList.add('selected');
@@ -103,9 +124,7 @@ function renderCarousel() {
 
 function selectClip(clip) {
     selectedClip = clip;
-    // Update UI
     Array.from(cardTrack.children).forEach(c => c.classList.remove('selected'));
-    // (In a real carousel, we'd map index, but simplistic here)
     const index = clips.indexOf(clip);
     if (cardTrack.children[index]) cardTrack.children[index].classList.add('selected');
 
@@ -113,31 +132,37 @@ function selectClip(clip) {
     log(`Selected: ${clip.name}`);
 }
 
-// Arming / View Switch
+// Arming logic
 armBtn.addEventListener('click', async () => {
     if (!selectedClip) return;
 
     views.selection.classList.remove('active');
     views.countdown.classList.add('active');
 
-    statusMsg.innerText = "Preloading video...";
+    statusMsg.innerText = "Buffering High-Res Content...";
 
-    // Preload Video
-    try {
-        const res = await fetch(selectedClip.path);
-        const blob = await res.blob();
-        videoBlobUrl = URL.createObjectURL(blob);
-        video.src = videoBlobUrl;
-        video.load();
-        log('Video preloaded blob size: ' + blob.size);
-        statusMsg.innerText = "Waiting for the drop...";
+    // Attempt normal load since validation is tricky with files without CORS
+    // but try/catch might not catch a network 404 on <video> tag easily without listeners
+    video.src = selectedClip.path;
+    video.load();
 
-        // Start Timer loop
-        requestAnimationFrame(updateTimer);
-    } catch (e) {
-        statusMsg.innerText = "Error loading video: " + e.message;
-    }
+    video.addEventListener('canplaythrough', onVideoReady, { once: true });
+    video.addEventListener('error', (e) => {
+        statusMsg.innerText = "Error loading video file.";
+        log("Video error: " + e);
+    });
+
+    // Fallback if canplaythrough doesn't fire (sometimes local files are weird)
+    setTimeout(() => {
+        if (video.readyState >= 3) onVideoReady();
+    }, 1000);
 });
+
+function onVideoReady() {
+    statusMsg.innerText = "Ready for the Drop.";
+    log('Video buffered and ready.');
+    requestAnimationFrame(updateTimer);
+}
 
 document.getElementById('cancel-btn').addEventListener('click', () => {
     views.countdown.classList.remove('active');
@@ -145,6 +170,7 @@ document.getElementById('cancel-btn').addEventListener('click', () => {
     videoContainer.classList.add('hidden');
     video.pause();
     video.currentTime = 0;
+    hasTriggered = false;
 });
 
 // Timing Logic
@@ -157,7 +183,6 @@ function updateTimer() {
     const target = midnight + devOffset;
     const diff = target - now;
 
-    // Formatting
     if (diff > 0) {
         const h = Math.floor(diff / 3600000);
         const m = Math.floor((diff % 3600000) / 60000);
@@ -172,20 +197,20 @@ function updateTimer() {
         timeEls.s.innerText = "00";
     }
 
-    // Trigger Check
     if (!selectedClip) return;
 
     const startOffsetSec = parseTimeStr(selectedClip.start_time_before_new_year);
-    // Time needed to start: Target - (Offset * 1000)
-    // We want to hit play exactly at that moment
-
     const triggerTime = target - (startOffsetSec * 1000);
 
-    // Check if we are past trigger time (and haven't triggered yet)
-    // Allow a small window (e.g., within last 500ms) to avoid double triggering if loop is slow
+    // Trigger window
     if (!hasTriggered && now >= triggerTime) {
-        log(`Triggering drop at ${new Date().toISOString()} (Target: ${new Date(target).toISOString()})`);
-        playDrop();
+        // If we missed it by more than 5 seconds, don't play (user opened late)
+        if (now - triggerTime < 5000) {
+            log(`Triggering drop at ${new Date().toISOString()}`);
+            playDrop();
+        } else {
+            console.warn("Missed the trigger window.");
+        }
     }
 
     requestAnimationFrame(updateTimer);
@@ -203,8 +228,8 @@ function playDrop() {
             log('Playback started');
         }).catch(error => {
             log('Playback failed: ' + error);
-            statusMsg.innerText = "Click to Play!";
-            statusMsg.onclick = () => video.play();
+            // Auto-interaction policy might block this if user didn't click anything
+            // But they clicked "Confirm Selection" which is a strong interaction.
         });
     }
 }
